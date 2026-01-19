@@ -1,4 +1,4 @@
-import json
+import ujson as json
 import logging
 import asyncio
 import urllib
@@ -20,6 +20,7 @@ from meta_ai_api.utils import get_fb_session, get_session
 from meta_ai_api.exceptions import FacebookRegionBlocked
 from meta_ai_api.extras import fake_agent
 
+from meta_ai_api.session_meta import fb_session_cookie
 MAX_RETRIES = 3
 
 # Setup logging
@@ -42,7 +43,15 @@ class MetaAI:
         self.fb_password = fb_password
         self.proxy = proxy
 
-        self.is_authed = fb_password is not None and fb_email is not None
+        # Special handling for NULL login (empty strings)
+        # NULL login should NOT be treated as authenticated
+        if fb_email == "" and fb_password == "":
+            self.is_authed = False  # Use anonymous mode with session cookie
+            self.use_session_cookie = True
+        else:
+            self.is_authed = fb_password is not None and fb_email is not None
+            self.use_session_cookie = False
+            
         self.cookies = None  # Will be fetched async
         self.external_conversation_id = None
         self.offline_threading_id = None
@@ -165,11 +174,12 @@ class MetaAI:
         headers = {
             "content-type": "application/x-www-form-urlencoded",
             "cookie": f'_js_datr={self.cookies["_js_datr"]}; '
-            f'abra_csrf={self.cookies["abra_csrf"]}; datr={self.cookies["datr"]};',
+             f'abra_csrf={self.cookies.get("abra_csrf", "")}; '
+             f'datr={self.cookies["datr"]}; '
+             f'abra_sess={self.cookies.get("abra_sess", "")};', 
             "sec-fetch-site": "same-origin",
             "x-fb-friendly-name": "useAbraAcceptTOSForTempUserMutation",
-        }
-
+            }
         self._dump_log(f"Requesting access token from {url}")
 
         response = await self.session.post(url, headers=headers, content=payload)
@@ -431,9 +441,25 @@ class MetaAI:
         Extracts necessary cookies from the Meta AI main page.
         """
         headers = {}
-        if self.fb_email is not None and self.fb_password is not None:
-            fb_session = await get_fb_session(self.fb_email, self.fb_password, self.proxy)
-            headers = {"cookie": f"abra_sess={fb_session['abra_sess']}"}
+        
+        # NULL login with hardcoded session
+        if self.use_session_cookie:
+            # Use hardcoded session cookie (update this with your real cookie!)
+            session_cookie = fb_session_cookie
+            headers = {"cookie": f"abra_sess={session_cookie}"}
+            self._dump_log(f"Using NULL login with session cookie")
+        # Real Facebook authentication
+        elif self.is_authed:
+            if self.fb_email == "" and self.fb_password == "":
+                # This shouldn't happen now, but keep as fallback
+                session_cookie = fb_session
+                headers = {"cookie": f"abra_sess={session_cookie}"}
+                self._dump_log("Using NULL login (fallback)")
+            else:
+                # Real Facebook authentication
+                fb_session = await get_fb_session(self.fb_email, self.fb_password, self.proxy)
+                headers = {"cookie": f"abra_sess={fb_session['abra_sess']}"}
+                self._dump_log("Using Facebook authentication")
         
         response = await self.session.get("https://www.meta.ai/", headers=headers)
         
@@ -457,8 +483,12 @@ class MetaAI:
             ),
         }
 
-        if len(headers) > 0:
-            cookies["abra_sess"] = fb_session["abra_sess"]
+        if len(headers) > 0 and self.is_authed:
+            # For authenticated users, we need the session
+            if self.use_session_cookie:
+                cookies["abra_sess"] = session_cookie
+            else:
+                cookies["abra_sess"] = fb_session["abra_sess"]
         else:
             cookies["abra_csrf"] = extract_value(
                 response_text, start_str='abra_csrf":{"value":"', end_str='",'

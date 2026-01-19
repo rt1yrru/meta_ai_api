@@ -1,3 +1,4 @@
+
 import logging
 import random
 import time
@@ -98,7 +99,7 @@ async def get_fb_session(email, password, proxy=None):
         "sec-fetch-site": "none",
         "sec-fetch-user": "?1",
         "upgrade-insecure-requests": "1",
-        "user-agent": fake_agent,
+        "user-agent": fake_agent(),
     }
     
     client_kwargs = {"follow_redirects": True}
@@ -128,7 +129,7 @@ async def get_fb_session(email, password, proxy=None):
         }
 
         headers = {
-            "User-Agent": fake_agent,
+            "User-Agent": fake_agent(),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": None,
@@ -195,7 +196,7 @@ async def get_fb_session(email, password, proxy=None):
                 "referer": "https://www.meta.ai/",
                 "sec-fetch-mode": "cors",
                 "sec-fetch-site": "same-origin",
-                "user-agent": fake_agent,
+                "user-agent": fake_agent(),
             }
 
             response = await session.post(url, headers=headers, content=payload)
@@ -215,7 +216,7 @@ async def get_fb_session(email, password, proxy=None):
                 "sec-fetch-site": "cross-site",
                 "sec-fetch-user": "?1",
                 "upgrade-insecure-requests": "1",
-                "user-agent": fake_agent,
+                "user-agent": fake_agent(),
             }
             
             # Use a new session for this request
@@ -232,7 +233,7 @@ async def get_fb_session(email, password, proxy=None):
 
                 payload = {}
                 headers = {
-                    "User-Agent": fake_agent,
+                    "User-Agent": fake_agent(),
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                     "Accept-Language": "en-US,en;q=0.5",
                     "Accept-Encoding": "gzip, deflate, br",
